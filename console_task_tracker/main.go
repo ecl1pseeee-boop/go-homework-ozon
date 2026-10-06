@@ -9,8 +9,9 @@ import (
 )
 
 func main() {
-	fileStorage := storage.NewFileStorage("data.json")
-	taskService := service.NewTaskService(fileStorage)
+	// s := storage.NewFileStorage("data.json")
+	s := storage.NewMemoryStorage()
+	taskService := service.NewTaskService(s)
 	app := cli.NewApp(taskService)
 	err := app.Run()
 
