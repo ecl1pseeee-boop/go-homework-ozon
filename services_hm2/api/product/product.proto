@@ -1,0 +1,19 @@
+syntax = "proto3";
+
+package product;
+
+option go_package = "github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/pkg/api/product";
+
+import "api/common/v1/product.proto";
+
+service ProductService {
+  rpc GetProduct(GetProductRequest) returns (GetProductResponse);
+}
+
+message GetProductRequest {
+  int64 sku = 1;
+}
+
+message GetProductResponse {
+  common.v1.Product product = 1;
+}
