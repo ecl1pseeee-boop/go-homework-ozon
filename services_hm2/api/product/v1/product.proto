@@ -1,19 +1,21 @@
 syntax = "proto3";
 
-package product;
+package product.v1;
 
 option go_package = "github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/pkg/api/product";
 
-import "api/common/v1/product.proto";
+import "validate/validate.proto";
 
 service ProductService {
   rpc GetProduct(GetProductRequest) returns (GetProductResponse);
 }
 
 message GetProductRequest {
-  int64 sku = 1;
+  int64 sku = 1 [(validate.rules).int64 = {gt: 0}];
 }
 
 message GetProductResponse {
-  common.v1.Product product = 1;
+  int64 sku = 1;
+  string name = 2;
+  int32 price = 3;
 }
