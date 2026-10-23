@@ -47,7 +47,7 @@ func (s *CartService) AddProduct(ctx context.Context, addProductDto dto.AddProdu
 	if err != nil {
 		st, ok := status.FromError(err)
 		if !ok {
-			return fmt.Errorf("ошибка вызова сервиса product")
+			return carterrors.ErrProductUnavailable
 		}
 
 		switch st.Code() {
@@ -56,7 +56,7 @@ func (s *CartService) AddProduct(ctx context.Context, addProductDto dto.AddProdu
 		case codes.InvalidArgument:
 			return carterrors.ErrInvalidData
 		default:
-			return fmt.Errorf("проблемы из-за неисправностей в системе")
+			return carterrors.ErrProductUnavailable
 		}
 	}
 
