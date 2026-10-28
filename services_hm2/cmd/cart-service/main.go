@@ -4,6 +4,7 @@ import (
 	"log"
 	"net/http"
 
+	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/clients/product"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/controller"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/repository"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/router"
@@ -20,8 +21,8 @@ func main() {
 	}
 
 	cartRepository := repository.NewCartRepository()
-	productGRPCClient := pb.NewProductServiceClient(conn)
-	cartService := services.NewCartService(cartRepository, productGRPCClient)
+	productClient := product.NewProductClient(pb.NewProductServiceClient(conn))
+	cartService := services.NewCartService(cartRepository, productClient)
 	cartHandler := controller.NewCartHandler(cartService)
 
 	mux := router.SetupRouter(cartHandler)

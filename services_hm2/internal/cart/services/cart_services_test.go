@@ -9,8 +9,6 @@ import (
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/models"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/repository"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
 )
 
 func TestCartService_AddProduct_Success(t *testing.T) {
@@ -26,14 +24,14 @@ func TestCartService_AddProduct_Success(t *testing.T) {
 		testName         string
 		ctx              context.Context
 		initProducts     map[int64]fakeProduct
-		newProduct       dto.AddProductDTO
+		newProduct       dto.AddProductRequestDTO
 		expectedUserCart []models.CartItem
 	}{
 		{
 			testName:     "Базовое добавление продукта",
 			ctx:          context.Background(),
 			initProducts: defaultProducts,
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  1,
 				Count:  3,
@@ -42,8 +40,6 @@ func TestCartService_AddProduct_Success(t *testing.T) {
 				{
 					Sku:   1,
 					Count: 3,
-					Name:  "fakeProduct",
-					Price: 54,
 				},
 			},
 		},
@@ -84,15 +80,15 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		ctx         context.Context
 		clientErr   error
 		initProduct map[int64]fakeProduct
-		newProduct  dto.AddProductDTO
+		newProduct  dto.AddProductRequestDTO
 		wantErr     error
 	}{
 		{
 			testName:  "Product service не доступен.",
 			ctx:       context.Background(),
-			clientErr: status.Error(codes.Unavailable, "down"),
+			clientErr: carterrors.ErrProductUnavailable,
 			wantErr:   carterrors.ErrProductUnavailable,
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  1,
 				Count:  3,
@@ -103,7 +99,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 			ctx:         context.Background(),
 			initProduct: defaultProducts,
 			wantErr:     carterrors.ErrProductNotFound,
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  2,
 				Count:  4,
@@ -112,7 +108,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName: "Неправильный формат данных (UserID меньше чем 0).",
 			ctx:      context.Background(),
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: -1,
 				SkuId:  1,
 				Count:  35,
@@ -122,7 +118,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName: "Неправильный формат данных (UserID = 0).",
 			ctx:      context.Background(),
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 0,
 				SkuId:  1,
 				Count:  35,
@@ -132,7 +128,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName: "Неправильный формат данных (SkuID меньше чем 0).",
 			ctx:      context.Background(),
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  -1,
 				Count:  35,
@@ -142,7 +138,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName: "Неправильный формат данных (SkuID = 0).",
 			ctx:      context.Background(),
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  0,
 				Count:  35,
@@ -152,7 +148,7 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName: "Неправильный формат данных. (Count = 0).",
 			ctx:      context.Background(),
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  1,
 				Count:  0,
@@ -162,9 +158,9 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName:    "Не валидные данные внутри product service.",
 			ctx:         context.Background(),
-			clientErr:   status.Error(codes.InvalidArgument, "invalid argument"),
+			clientErr:   carterrors.ErrInvalidData,
 			initProduct: defaultProducts,
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  1,
 				Count:  35,
@@ -174,9 +170,9 @@ func TestCartService_AddProduct_Fail(t *testing.T) {
 		{
 			testName:  "Не правильный адрес Product service.",
 			ctx:       context.Background(),
-			clientErr: status.Error(codes.Unknown, "down"),
+			clientErr: carterrors.ErrProductUnavailable,
 			wantErr:   carterrors.ErrProductUnavailable,
-			newProduct: dto.AddProductDTO{
+			newProduct: dto.AddProductRequestDTO{
 				UserId: 1,
 				SkuId:  1,
 				Count:  3,
@@ -215,12 +211,10 @@ func TestCartService_AddProduct_Again_Success(t *testing.T) {
 	repoAddErr := repo.AddProduct(1, models.CartItem{
 		Sku:   1,
 		Count: 1,
-		Name:  "fakeProduct",
-		Price: 54,
 	})
 	require.NoError(t, repoAddErr)
 
-	svcAddErr := svc.AddProduct(context.Background(), dto.AddProductDTO{
+	svcAddErr := svc.AddProduct(context.Background(), dto.AddProductRequestDTO{
 		UserId: 1,
 		SkuId:  1,
 		Count:  1,
@@ -256,8 +250,6 @@ func TestCartService_GetUserCart_Success(t *testing.T) {
 	userCartItem2 := models.CartItem{
 		Sku:   2,
 		Count: 3,
-		Name:  "fakeProduct2",
-		Price: uint32(54),
 	}
 	addProductErr := repo.AddProduct(1, userCartItem2)
 	require.NoError(t, addProductErr)
@@ -265,28 +257,26 @@ func TestCartService_GetUserCart_Success(t *testing.T) {
 	userCartItem1 := models.CartItem{
 		Sku:   1,
 		Count: 3,
-		Name:  "fakeProduct1",
-		Price: uint32(54),
 	}
 	addProductErr2 := repo.AddProduct(1, userCartItem1)
 	require.NoError(t, addProductErr2)
 
-	userCart, cartErr := svc.GetUserCart(context.Background(), dto.GetUserCartDTO{
+	userCart, cartErr := svc.GetUserCart(context.Background(), dto.GetUserCartRequestDTO{
 		UserId: 1,
 	})
 
-	expectedUserCartItems := []models.CartItem{
+	expectedUserCartItems := []dto.CartItemInfo{
 		{
 			Sku:   1,
-			Count: 3,
 			Name:  "fakeProduct1",
 			Price: 54,
+			Count: 3,
 		},
 		{
 			Sku:   2,
-			Count: 3,
 			Name:  "fakeProduct2",
 			Price: 54,
+			Count: 3,
 		},
 	}
 
@@ -301,18 +291,18 @@ func TestCartService_GetUserCart_Fail(t *testing.T) {
 	tests := []struct {
 		testName    string
 		wantErr     error
-		getUserCart dto.GetUserCartDTO
+		getUserCart dto.GetUserCartRequestDTO
 	}{
 		{
 			testName: "Не валидный id пользователя.",
-			getUserCart: dto.GetUserCartDTO{
+			getUserCart: dto.GetUserCartRequestDTO{
 				UserId: -1,
 			},
 			wantErr: carterrors.ErrInvalidData,
 		},
 		{
 			testName: "Пользовательская корзина не найдена.",
-			getUserCart: dto.GetUserCartDTO{
+			getUserCart: dto.GetUserCartRequestDTO{
 				UserId: 4,
 			},
 			wantErr: carterrors.ErrCartNotFound,
@@ -341,36 +331,45 @@ func TestCartService_GetUserCart_Fail(t *testing.T) {
 func TestCartService_SolveTotalPrice(t *testing.T) {
 	t.Parallel()
 
+	products := map[int64]fakeProduct{
+		2: {
+			Name:  "fakeProduct2",
+			Price: 100,
+		},
+		1: {
+			Name:  "fakeProduct1",
+			Price: 10,
+		},
+		3: {
+			Name:  "fakeProduct1",
+			Price: 1000,
+		},
+	}
+
 	userCart := models.Cart{
 		UserID: 1,
 		CartItems: []models.CartItem{
 			{
 				Sku:   1,
-				Name:  "fakeProduct",
 				Count: 2,
-				Price: uint32(54),
 			},
 			{
 				Sku:   2,
 				Count: 2,
-				Name:  "fakeProduct2",
-				Price: uint32(50),
 			},
 			{
 				Sku:   3,
 				Count: 2,
-				Name:  "fakeProduct3",
-				Price: uint32(100),
 			},
 		},
 	}
 
-	expectedTotalPrice := uint32(408)
+	expectedTotalPrice := uint32(2220)
 
 	repo := repository.NewCartRepository()
 	svc := NewCartService(
 		repo,
-		newFakeProductClient(make(map[int64]fakeProduct)),
+		newFakeProductClient(products),
 	)
 
 	for _, cartItem := range userCart.CartItems {
@@ -378,7 +377,7 @@ func TestCartService_SolveTotalPrice(t *testing.T) {
 		require.NoError(t, addProductErr)
 	}
 
-	userCartResponse, cartErr := svc.GetUserCart(context.Background(), dto.GetUserCartDTO{
+	userCartResponse, cartErr := svc.GetUserCart(context.Background(), dto.GetUserCartRequestDTO{
 		UserId: 1,
 	})
 

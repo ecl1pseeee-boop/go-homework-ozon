@@ -5,23 +5,19 @@ import (
 	"context"
 	"fmt"
 	"slices"
+	"time"
 
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/carterrors"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/dto"
 	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/models"
-	pb "github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/pkg/api/product"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"golang.org/x/sync/errgroup"
 )
+
+const timeout = time.Second
 
 type CartService struct {
 	repository    CartRepository
-	productClient ProductGRPCClient
-}
-
-type ProductGRPCClient interface {
-	GetProduct(ctx context.Context, in *pb.GetProductRequest, opts ...grpc.CallOption) (*pb.GetProductResponse, error)
+	productClient ProductClient
 }
 
 type CartRepository interface {
@@ -29,41 +25,32 @@ type CartRepository interface {
 	GetUserCart(userId models.UserID) (models.Cart, error)
 }
 
-func NewCartService(repository CartRepository, productClient ProductGRPCClient) *CartService {
+type ProductClient interface {
+	GetProduct(ctx context.Context, skuId int64) (*dto.GetProductResponseDTO, error)
+}
+
+func NewCartService(repository CartRepository, productClient ProductClient) *CartService {
 	return &CartService{
 		repository:    repository,
 		productClient: productClient,
 	}
 }
 
-func (s *CartService) AddProduct(ctx context.Context, addProductDto dto.AddProductDTO) error {
+func (s *CartService) AddProduct(ctx context.Context, addProductDto dto.AddProductRequestDTO) error {
 	if addProductDto.UserId <= 0 || addProductDto.SkuId <= 0 || addProductDto.Count <= 0 {
 		return carterrors.ErrInvalidData
 	}
-	getProductRequest := &pb.GetProductRequest{
-		Sku: addProductDto.SkuId,
-	}
-	productResponse, err := s.productClient.GetProduct(ctx, getProductRequest)
-	if err != nil {
-		st, ok := status.FromError(err)
-		if !ok {
-			return carterrors.ErrProductUnavailable
-		}
 
-		switch st.Code() {
-		case codes.NotFound:
-			return carterrors.ErrProductNotFound
-		case codes.InvalidArgument:
-			return carterrors.ErrInvalidData
-		default:
-			return carterrors.ErrProductUnavailable
-		}
+	newCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	productResponse, err := s.productClient.GetProduct(newCtx, addProductDto.SkuId)
+	if err != nil {
+		return err
 	}
 
 	cartItem := models.CartItem{
 		Sku:   productResponse.Sku,
-		Name:  productResponse.Name,
-		Price: uint32(productResponse.Price),
 		Count: addProductDto.Count,
 	}
 
@@ -75,36 +62,65 @@ func (s *CartService) AddProduct(ctx context.Context, addProductDto dto.AddProdu
 	return nil
 }
 
-func (s *CartService) GetUserCart(ctx context.Context, userCartDto dto.GetUserCartDTO) (dto.UserCartResponseDTO, error) {
+func (s *CartService) GetUserCart(ctx context.Context, userCartDto dto.GetUserCartRequestDTO) (dto.UserCartResponseDTO, error) {
 	if userCartDto.UserId <= 0 {
 		return dto.UserCartResponseDTO{}, carterrors.ErrInvalidData
 	}
+
 	userCart, err := s.repository.GetUserCart(models.UserID(userCartDto.UserId))
 	if err != nil {
 		return dto.UserCartResponseDTO{}, fmt.Errorf("ошибка получения корзины пользователя: %w", err)
 	}
 
-	cartItems := slices.Clone(userCart.CartItems)
+	cartItems := userCart.CartItems
+	if len(cartItems) == 0 {
+		return dto.UserCartResponseDTO{}, carterrors.ErrCartEmpty
+	}
 
-	slices.SortFunc(cartItems, func(a, b models.CartItem) int {
+	results := make([]dto.CartItemInfo, len(cartItems))
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	g, groupCtx := errgroup.WithContext(timeoutCtx)
+
+	for i, cartItem := range cartItems {
+		g.Go(func() error {
+			productResponse, respErr := s.productClient.GetProduct(groupCtx, cartItem.Sku)
+			if respErr == nil {
+				results[i] = dto.CartItemInfo{
+					Sku:   cartItem.Sku,
+					Price: uint32(productResponse.Price),
+					Name:  productResponse.Name,
+					Count: cartItem.Count,
+				}
+			}
+			return respErr
+		})
+	}
+
+	if gerr := g.Wait(); gerr != nil {
+		return dto.UserCartResponseDTO{}, gerr
+	}
+
+	totalPrice, solveErr := s.solveTotalPrice(results)
+	if solveErr != nil {
+		return dto.UserCartResponseDTO{}, fmt.Errorf("ошибка вычисления суммы корзины пользователя: %w", solveErr)
+	}
+
+	slices.SortFunc(results, func(a, b dto.CartItemInfo) int {
 		return cmp.Compare(a.Sku, b.Sku)
 	})
 
-	totalPrice, err := s.solveTotalPrice(&userCart)
-	if err != nil {
-		return dto.UserCartResponseDTO{}, fmt.Errorf("ошибка вычисления суммы корзины пользователя: %w", err)
-	}
-
-	response := dto.UserCartResponseDTO{
-		Items:      cartItems,
+	return dto.UserCartResponseDTO{
+		Items:      results,
 		TotalPrice: totalPrice,
-	}
-	return response, nil
+	}, nil
 }
 
-func (s *CartService) solveTotalPrice(userCart *models.Cart) (uint32, error) {
+func (s *CartService) solveTotalPrice(products []dto.CartItemInfo) (uint32, error) {
 	var price uint32
-	for _, cart := range userCart.CartItems {
+	for _, cart := range products {
 		price += cart.Price * cart.Count
 	}
 	return price, nil

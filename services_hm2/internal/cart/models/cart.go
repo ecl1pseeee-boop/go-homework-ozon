@@ -7,9 +7,5 @@ type Cart struct {
 
 type CartItem struct {
 	Sku   int64  `json:"sku"`
-	Name  string `json:"name"`
 	Count uint32 `json:"count"`
-	Price uint32 `json:"price"`
 }
-
-type CartID int64

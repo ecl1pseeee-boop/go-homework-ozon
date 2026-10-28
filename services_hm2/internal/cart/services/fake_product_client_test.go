@@ -3,10 +3,8 @@ package services
 import (
 	"context"
 
-	pb "github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/pkg/api/product"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/codes"
-	"google.golang.org/grpc/status"
+	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/carterrors"
+	"github.com/ecl1pseeee-boop/go-homework-ozon/services_hm2/internal/cart/dto"
 )
 
 type fakeProduct struct {
@@ -25,18 +23,17 @@ func newFakeProductClient(products map[int64]fakeProduct) *fakeProductClient {
 	}
 }
 
-func (c *fakeProductClient) GetProduct(ctx context.Context, in *pb.GetProductRequest, opts ...grpc.CallOption) (*pb.GetProductResponse, error) {
+func (c *fakeProductClient) GetProduct(ctx context.Context, skuId int64) (*dto.GetProductResponseDTO, error) {
 	if c.err != nil {
 		return nil, c.err
 	}
 
-	skuId := in.Sku
 	p, ok := c.products[skuId]
 	if !ok {
-		return nil, status.Error(codes.NotFound, "fakeProduct not found")
+		return nil, carterrors.ErrProductNotFound
 	}
 
-	return &pb.GetProductResponse{
+	return &dto.GetProductResponseDTO{
 		Sku:   skuId,
 		Name:  p.Name,
 		Price: int32(p.Price),

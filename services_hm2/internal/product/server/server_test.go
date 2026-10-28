@@ -22,10 +22,9 @@ func TestServer_Fail(t *testing.T) {
 	response, serverErr := server.GetProduct(context.Background(), &pb.GetProductRequest{
 		Sku: 1,
 	})
-	st, ok := status.FromError(serverErr)
-	require.True(t, ok)
 
-	require.Equal(t, codes.Internal, st.Code())
+	stCode := status.Code(serverErr)
+	require.Equal(t, codes.Internal, stCode)
 	require.Nil(t, response)
 
 }
