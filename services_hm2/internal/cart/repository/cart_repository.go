@@ -9,7 +9,7 @@ import (
 )
 
 type CartRepository struct {
-	mu    sync.Mutex
+	mu    sync.RWMutex
 	carts map[models.UserID]*models.Cart
 }
 
@@ -40,8 +40,8 @@ func (repo *CartRepository) AddProduct(userId models.UserID, cartItem models.Car
 }
 
 func (repo *CartRepository) GetUserCart(userId models.UserID) (models.Cart, error) {
-	repo.mu.Lock()
-	defer repo.mu.Unlock()
+	repo.mu.RLock()
+	defer repo.mu.RUnlock()
 	userCart, ok := repo.carts[userId]
 	if !ok {
 		return models.Cart{}, carterrors.ErrCartNotFound

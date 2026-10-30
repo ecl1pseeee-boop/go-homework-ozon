@@ -16,8 +16,8 @@ type CartHandler struct {
 }
 
 type CartService interface {
-	AddProduct(ctx context.Context, dto dto.AddProductDTO) error
-	GetUserCart(ctx context.Context, dto dto.GetUserCartDTO) (dto.UserCartResponseDTO, error)
+	AddProduct(ctx context.Context, dto dto.AddProductRequestDTO) error
+	GetUserCart(ctx context.Context, dto dto.GetUserCartRequestDTO) (dto.UserCartResponseDTO, error)
 }
 
 func NewCartHandler(cartService CartService) *CartHandler {
@@ -25,17 +25,15 @@ func NewCartHandler(cartService CartService) *CartHandler {
 }
 
 func (h *CartHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
-
 	userID, err := strconv.ParseInt(r.PathValue("user_id"), 10, 64)
 	if err != nil {
 		http.Error(w, "Неправильный формат user_id", http.StatusBadRequest)
 		return
 	}
 
-	userCartDTO := dto.GetUserCartDTO{
+	userCart, serviceErr := h.cartService.GetUserCart(r.Context(), dto.GetUserCartRequestDTO{
 		UserId: userID,
-	}
-	userCart, serviceErr := h.cartService.GetUserCart(r.Context(), userCartDTO)
+	})
 
 	if serviceErr != nil {
 		switch {
@@ -43,6 +41,10 @@ func (h *CartHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 			http.Error(w, serviceErr.Error(), http.StatusNotFound)
 		case errors.Is(serviceErr, carterrors.ErrInvalidData):
 			http.Error(w, serviceErr.Error(), http.StatusBadRequest)
+		case errors.Is(serviceErr, carterrors.ErrProductNotFound):
+			http.Error(w, serviceErr.Error(), http.StatusPreconditionFailed)
+		case errors.Is(serviceErr, carterrors.ErrCartEmpty):
+			http.Error(w, serviceErr.Error(), http.StatusNotFound)
 		default:
 			http.Error(w, "Ошибка получения доступа к сервису", http.StatusInternalServerError)
 		}
@@ -55,10 +57,6 @@ func (h *CartHandler) GetCartHandler(w http.ResponseWriter, r *http.Request) {
 		http.Error(w, encodeErr.Error(), http.StatusInternalServerError)
 		return
 	}
-}
-
-type AddProductRequest struct {
-	Count uint32 `json:"count"`
 }
 
 func (h *CartHandler) AddProductHandler(w http.ResponseWriter, r *http.Request) {
@@ -84,26 +82,26 @@ func (h *CartHandler) AddProductHandler(w http.ResponseWriter, r *http.Request) 
 	w.WriteHeader(http.StatusOK)
 }
 
-func (h *CartHandler) parseAddProductRequest(r *http.Request) (dto.AddProductDTO, error) {
+func (h *CartHandler) parseAddProductRequest(r *http.Request) (dto.AddProductRequestDTO, error) {
 	userID, userParseErr := strconv.ParseInt(r.PathValue("user_id"), 10, 64)
 	if userParseErr != nil {
-		return dto.AddProductDTO{}, userParseErr
+		return dto.AddProductRequestDTO{}, userParseErr
 	}
 
 	skuID, skuParseErr := strconv.ParseInt(r.PathValue("sku_id"), 10, 64)
 	if skuParseErr != nil {
-		return dto.AddProductDTO{}, skuParseErr
+		return dto.AddProductRequestDTO{}, skuParseErr
 	}
 
-	var req AddProductRequest
-	decodeErr := json.NewDecoder(r.Body).Decode(&req)
+	var requestBody dto.AddProductRequestBody
+	decodeErr := json.NewDecoder(r.Body).Decode(&requestBody)
 	if decodeErr != nil {
-		return dto.AddProductDTO{}, decodeErr
+		return dto.AddProductRequestDTO{}, decodeErr
 	}
 
-	return dto.AddProductDTO{
+	return dto.AddProductRequestDTO{
 		UserId: userID,
 		SkuId:  skuID,
-		Count:  req.Count,
+		Count:  requestBody.Count,
 	}, nil
 }
