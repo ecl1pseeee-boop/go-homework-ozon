@@ -1,4 +1,6 @@
 SELECT name, age
 FROM users
-ORDER BY age DESC
-LIMIT 1
+WHERE users.city = 'Москва'
+  AND age = (
+        SELECT MAX(age) FROM users WHERE city = 'Москва'
+    )

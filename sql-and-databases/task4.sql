@@ -1,6 +1,6 @@
 SELECT DISTINCT u.name
 FROM users AS u
-LEFT JOIN orders AS o ON u.id = o.user_id
+JOIN orders AS o ON u.id = o.user_id
 WHERE o.item = 'наушники'
-ORDER BY u.name
+ORDER BY u.name;
 
